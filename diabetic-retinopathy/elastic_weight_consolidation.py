@@ -30,30 +30,6 @@ class ElasticWeightConsolidation:
 
         return KD_loss
 
-    # def _update_fisher_params(self, ds,batch_size):
-    #     dl = DataLoader(ds, batch_size, shuffle=True)
-
-
-
-    #     log_liklihoods = 0
-    #     for i,data in enumerate(dl):
-    #         inputs = data['image'].cuda()
-    #         target = data['label'].cuda()
-    #         # if len(data) != 8:
-    #         #     continue
-            
-    #         output = F.log_softmax(self.model(inputs), dim=1)
-    #         if len(output[:, target]) != 8:
-    #             continue
-    #         log_liklihoods = ((i+1) * log_liklihoods + output[:, target]) / (i+2)     
-    #     log_likelihood = torch.cat(log_liklihoods).mean()
-    #     grad_log_liklihood = autograd.grad(log_likelihood, self.model.parameters(),allow_unused=True)
-    #     _buff_param_names = [param[0].replace('.', '__') for param in self.model.named_parameters()]
-    #     for _buff_param_name, param in zip(_buff_param_names, grad_log_liklihood):
-    #         if param == None:
-    #             continue
-    #         self.model.register_buffer(_buff_param_name+'_estimated_fisher', param.data.clone() ** 2)
-
     def _update_fisher_params(self, current_ds, batch_size, num_batch):
         dl = DataLoader(current_ds, batch_size, shuffle=True)
         log_liklihoods = []

@@ -30,7 +30,7 @@ def get_transform(name):
              ])
     return data_transforms
 
-class Retina_Dataset(Dataset):
+class Retina_Class_Dataset(Dataset):
     def __init__(self, name, args, data_batch,switch):
         super(Retina_Dataset, self).__init__()
         assert name in ['train', 'val','test','test_final_loader']
