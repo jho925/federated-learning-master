@@ -38,7 +38,7 @@ def get_transform(name):
              ])
     return data_transforms
 
-class Boneage_Class_Dataset(Dataset):
+class Boneage_Dataset(Dataset):
     def __init__(self, name, args, data_batch,switch):
         super(Boneage_Dataset, self).__init__()
         assert name in ['train', 'val','test','test_final_loader','male_test','female_test']
