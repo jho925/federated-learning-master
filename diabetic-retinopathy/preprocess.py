@@ -11,10 +11,11 @@ def scaleRadius(img,scale):
     return cv2.resize(img,(0,0),fx=s,fy=s)
 
 scale = 256
-files = glob.glob("/media/jb/DATA/retina/train/*.jpeg")
+files = glob.glob("data/test/*.jpeg")
+print(len(files))
 for i, f in enumerate(tqdm(files)):
     try:
-        outfile = "out_train/" + os.path.basename(f).split(".")[0]
+        outfile = "data/combined/" + os.path.basename(f).split(".")[0]
         if os.path.exists(outfile+".npy"):#and os.path.getsize(outfile+".npy") == 393344:
             continue
         a = cv2.imread(f)

@@ -12,26 +12,29 @@ import pandas as pd
 import random
 
 def get_transform(name):
-
+    ''' Transform images '''
     if 'train' in name:
         data_transforms = transforms.Compose(
             [transforms.RandomHorizontalFlip(p=0.5),
              transforms.Resize([256, 256]),
              transforms.RandomCrop([224, 224]),
              transforms.ToTensor(),
-             # transforms.Normalize([0.485], [0.229])
              ])
     else:
         data_transforms = transforms.Compose(
             [transforms.Resize([256, 256]),
              transforms.CenterCrop([224, 224]),
              transforms.ToTensor(),
-             # transforms.Normalize([0.485], [0.229])
              ])
     return data_transforms
 
 class Retina_Dataset(Dataset):
     def __init__(self, name, args, data_batch,switch):
+        ''' 
+        Splits data into train, val and test.
+        Additionally, splits data into different
+        sites and rounds 
+        '''
         super(Retina_Dataset, self).__init__()
         assert name in ['train', 'val','test','test_final_loader']
         self.name = name
@@ -53,7 +56,7 @@ class Retina_Dataset(Dataset):
         random.Random(args.seed).shuffle(data)
 
 
-
+        # Seperate data by class
         j = data_batch
         if args.class_incremental == 'no':
             self.labels.update({a:1 for a in self.labels if self.labels[a] >= 1})
@@ -126,9 +129,6 @@ class Retina_Dataset(Dataset):
                     data = positives[int(args.train_size/2)*j:int(args.train_size/2)*(j+1)] + negatives[int(args.train_size/2)*j:int(args.train_size/2)*(j+1)]
                 if name == 'val': 
                     data = positives[positive_add+mod*(positive_train+positive_val)+positive_train:positive_add+(mod+1)*(positive_train+positive_val)] + negatives[negative_add+mod*(negative_train+negative_val) + negative_train:negative_add+(mod+1)*(negative_train+negative_val)]
-
-     
-        
         else:
 
             label_0 = []

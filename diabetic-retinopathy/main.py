@@ -4,7 +4,6 @@ import torch
 import random
 from torch.utils.data import DataLoader
 from retina_dataset import Retina_Dataset
-from retina_class import Retina_Class_Dataset
 from torchvision.models import resnet18
 from torchvision.models import resnet34
 from torchvision.models import squeezenet1_0
@@ -27,15 +26,13 @@ from model import train_epoch,train_site,roc_auc_score_multiclass,plot_roc,test_
 def main():
     args = parse_args()
 
-    if args.class_incremental = "yes":
-        args.dataloader = "Retina_Class_Dataset"
-
     # Seed
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
+    # Generate train dict
     train_loader_dict = {}
     for j in range(1,args.rounds*args.sites+1):
         key_train_loader = "train_loader" + str(j)
@@ -58,13 +55,14 @@ def main():
         else:
             train_loader_dict[key_train_loader] = DataLoader(dataset, args.batch_size,num_workers=8, pin_memory=True)
 
-
+    # Generate val dict
     val_loader_dict = {}
     for j in range(1,args.rounds*args.sites+1):
         key_val_loader = "val_loader" + str(j)
         dataset = eval(args.dataloader)('val', args, j,0)
         val_loader_dict[key_val_loader] = DataLoader(dataset, args.batch_size,num_workers=8, pin_memory=True)
 
+    # Generate test dict
     test_loader_dict = {}
     for j in range(1,args.rounds):
         key_test_loader = "test_loader" + str(j)
@@ -73,41 +71,48 @@ def main():
 
     test_final_loader = DataLoader(eval(args.dataloader)('test_final_loader', args,0,0), args.batch_size, num_workers=8, pin_memory=True)
 
+
+    # Create initial neural network
     net = eval(args.model)(pretrained=True)
     net.fc = nn.Linear(512, 2)
-    #net.fc.register_forward_hook(lambda m, inp, out: F.dropout(out, p=0.4, training=m.training))
     net.cuda()
+    # Set up elastic weight consolidation
     ewc= ElasticWeightConsolidation(net, nn.CrossEntropyLoss(reduction="sum").cuda(), lr=args.lr, weight=10000) 
 
+    # Loop through each round of training
     for j in range(args.rounds-1,-1,-1):
         best_ewc = None
         best_performance = 0  
         ewc.model.train(True)
         prev_model = copy.deepcopy(net)
         print("Starting Training Round on Set " + str(j+1) + "...")
+        
+        # Loop through each site
         for k in range(args.epochs_per):
             ewc,best_ewc,best_performace = train_site(args, train_loader_dict['train_loader' + str(args.sites*j+k%args.sites+1)], val_loader_dict, ewc, j,best_ewc,best_performance,k,prev_model)
 
 
-
+        # Register hyperparameters
         for i in range(args.sites):
             ewc.register_ewc_params(train_loader_dict['train_loader' + str((j)*args.sites +i + 1)].dataset,args.batch_size)
 
         prev_model = copy.deepcopy(ewc.model)
         ewc.model.train(False)
 
+        # Print accuracy
         if j != 0:
             full_pred, full_labels,unthreshold_pred = test_round(test_loader_dict['test_loader' + str(j)], ewc)
             accuracy, ci_low, ci_high,auc,auc_low,auc_high = get_accuracy(full_pred, full_labels,unthreshold_pred,j)
             print("Round " + str(j+1) + " Accuracy on Test " + str(j+1) + ": {} ({} - {})".format(accuracy, ci_low, ci_high))
             print("Round " + str(j+1) + " AUC_ROC on Test " + str(j+1) + ": {} ({} - {})".format(auc, auc_low, auc_high))
 
-
+        # Print final accuracy
         full_pred, full_labels,unthreshold_pred = test_round(test_final_loader, ewc)
         accuracy, ci_low, ci_high,auc,auc_low,auc_high = get_accuracy(full_pred, full_labels,unthreshold_pred,j)
         print("Round " + str(j+1) + " Accuracy on Final Test: {} ({} - {})".format(accuracy, ci_low, ci_high))
         print("Round " + str(j+1) + " AUC_ROC on Final Test: {} ({} - {})".format(auc, auc_low, auc_high))
 
+    # Save the model
     torch.save(ewc.model, args.model_save_path)
 
 
