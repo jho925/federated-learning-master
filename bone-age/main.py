@@ -4,8 +4,7 @@ import torch
 import random
 from torch.utils.data import DataLoader
 from boneage_dataset import Boneage_Dataset
-from torchvision.models import resnet18
-from torchvision.models import resnet34
+import torchvision.models as models
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -26,8 +25,6 @@ from model import train_epoch,train_site,test_round,get_error,loss_fn_kd,parse_a
 # from ray.tune.schedulers import AsyncHyperBandScheduler
 
 def main():
-    if args.class_incremental = "yes":
-        args.dataloader = "Boneage_Class_Dataset"
 
 
     args = parse_args()
@@ -39,6 +36,7 @@ def main():
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
+    # Generate train dict
     train_loader_dict = {}
     for j in range(1,args.rounds*args.sites+1):
         key_train_loader = "train_loader" + str(j)
@@ -59,13 +57,14 @@ def main():
         else:
             train_loader_dict[key_train_loader] = DataLoader(dataset, args.batch_size,num_workers=8, pin_memory=True)
 
-
+    # Generate val dict
     val_loader_dict = {}
     for j in range(1,args.rounds*args.sites+1):
         key_val_loader = "val_loader" + str(j)
         dataset = eval(args.dataloader)('val', args, j,0)
         val_loader_dict[key_val_loader] = DataLoader(dataset, args.batch_size,num_workers=8, pin_memory=True)
 
+    # Generate test dict
     test_loader_dict = {}
     for j in range(1,args.rounds):
         key_test_loader = "test_loader" + str(j)
@@ -78,38 +77,45 @@ def main():
     female_test = DataLoader(eval(args.dataloader)('female_test', args,0,0), args.batch_size, num_workers=8, pin_memory=True)
 
 
+    # Generate initial neural network
     net = eval(args.model)(pretrained=True)
     net.fc = nn.Linear(512, 1)
     net.cuda()
-
+    # Set up elastic weight consolidation
     ewc= ElasticWeightConsolidation(net, nn.L1Loss(reduction="mean").cuda() , lr=args.lr, weight=10000) 
+    
+    # Loop through each round of training
     for j in range(args.rounds):
         best_ewc = None
         best_performance = 0
         ewc.model.train(True)
         prev_model = copy.deepcopy(net)
         print("Starting Training Round on Set " + str(j+1) + "...")
+        
+        # Loop through each site
         for k in range(args.epochs_per):
             ewc,best_ewc,best_performace = train_site(args, train_loader_dict['train_loader' + str(args.sites*j+k%args.sites+1)], val_loader_dict, ewc, j,best_ewc,best_performance,k,prev_model)
 
-
-
+        # Register hyperparameters
         for i in range(args.sites):
             ewc.register_ewc_params(train_loader_dict['train_loader' + str((j)*args.sites +i + 1)].dataset,args.batch_size)
 
         prev_model = copy.deepcopy(ewc.model)
         ewc.model.train(False)
 
+        # Print accuracy
         if j != args.rounds - 1:
             full_pred, full_labels = test_round(test_loader_dict['test_loader' + str(j+1)], net)
             error, ci_low, ci_high = get_error(full_pred, full_labels)
             print("Round " + str(j+1) + " Error on Test " + str(j+1) + ": {} ({} - {})".format(error, ci_low, ci_high))
 
-
+        # Print final accuracy
         full_pred, full_labels = test_round(test_final_loader, net)
         error, ci_low, ci_high = get_error(full_pred, full_labels)
         print("Round " + str(j+1) + " Error on Final Test: {} ({} - {})".format(error, ci_low, ci_high))
 
+
+        # Print accuracy on different classes
         full_pred, full_labels = test_round(male_test, net)
         error, ci_low, ci_high = get_error(full_pred, full_labels)
         print("Round " + str(j+1) + " Error on Male Test: {} ({} - {})".format(error, ci_low, ci_high))
@@ -118,6 +124,11 @@ def main():
         error, ci_low, ci_high = get_error(full_pred, full_labels)
         print("Round " + str(j+1) + " Error on Female Test: {} ({} - {})".format(error, ci_low, ci_high))
 
+    # Save the model
+    torch.save(ewc.model, args.model_save_path)
+
+if __name__ == '__main__':
+    main()
 
 
 

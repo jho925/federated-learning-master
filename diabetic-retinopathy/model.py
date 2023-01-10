@@ -4,9 +4,7 @@ import torch
 import random
 from torch.utils.data import DataLoader
 from retina_dataset import Retina_Dataset
-from torchvision.models import resnet18
-from torchvision.models import resnet34
-from torchvision.models import squeezenet1_0
+import torchvision.models as models
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -22,20 +20,21 @@ matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 
 
+
 def train_epoch(ewc,args,train_loader,rounds,epoch,prev_model):
-    # optimizer = optim.Adam(net.parameters(), lr=args.lr)
+    ''' Train a single epoch '''
     for iteration, data in enumerate(train_loader):
         inputs = data['image'].cuda()
-        #.cuda()
+        
 
         labels = data['label'].cuda().flatten()
-        #.cuda()
         ewc.forward_backward_update(inputs, labels,train_loader,args.batch_size,args.lr,epoch,iteration,prev_model,rounds)
 
     return ewc
 
 
 def train_site(args, train_loader, eval_loader_dict, ewc, round_num,best_ewc,best_performance,epoch,prev_model):
+    ''' Train a site '''
     ewc.model.train(True)
     ewc= train_epoch(ewc, args, train_loader, round_num, epoch,prev_model)
     ewc.model.train(False)
@@ -76,7 +75,7 @@ def train_site(args, train_loader, eval_loader_dict, ewc, round_num,best_ewc,bes
     return ewc,best_ewc,best_performance
 
 def roc_auc_score_multiclass(actual_class, pred_class, average = "macro"):
-
+    ''' Finding the roc_auc score of the model '''
     #creating a set of all the unique classes using the actual class list
     unique_class = set(actual_class)
     roc_auc_dict = {}
@@ -99,6 +98,7 @@ def roc_auc_score_multiclass(actual_class, pred_class, average = "macro"):
 
 
 def test_round(test_loader,net):
+    ''' Testing the model at the end of each round '''
     full_pred = []
     full_labels = []
     unthreshold_pred = []
@@ -114,7 +114,7 @@ def test_round(test_loader,net):
     return full_pred, full_labels,unthreshold_pred
 
 def plot_roc(labels,pred,auc,round_num,auc_low,auc_high):
-
+    ''' Plotting the score of each round '''
     fpr, tpr, _ = metrics.roc_curve(labels,pred)
     plt.plot(fpr, tpr, 'b', label = 'Federated Incremental Learning Homogeneous = %0.2f [%0.2f - %0.2f]' % (auc,auc_low,auc_high) , color="blue")
 
@@ -132,11 +132,7 @@ def plot_roc(labels,pred,auc,round_num,auc_low,auc_high):
 
 
 def get_accuracy(full_pred, full_labels,unthreshold_pred,round_num):
-    # tn, fp, fn, tp = confusion_matrix(full_labels,full_pred).ravel()
-    # print("True negative: " + str(tn))
-    # print("False positive: " + str(fp))
-    # print("False negative: " + str(fn))
-    # print("True positive: " + str(tp))
+    ''' Finding the overall accuracy of the model '''
 
     all_predictions = np.asarray(full_pred)
     all_labels = np.asarray(full_labels)
@@ -166,12 +162,10 @@ def get_accuracy(full_pred, full_labels,unthreshold_pred,round_num):
 
 
 def loss_fn_kd(outputs, labels, teacher_outputs):
-    """
+    '''
     Compute the knowledge-distillation (KD) loss given outputs, labels.
     "Hyperparameters": temperature and alpha
-    NOTE: the KL Divergence for PyTorch comparing the softmaxs of teacher
-    and student expects the input tensor to be log probabilities! See Issue #2
-    """
+    '''
     alpha = 0.5
     T = 3
     KD_loss = nn.KLDivLoss()(F.log_softmax(outputs/T, dim=1),
@@ -183,13 +177,12 @@ def loss_fn_kd(outputs, labels, teacher_outputs):
 def parse_args():
     parser = argparse.ArgumentParser()
     # Model
-    parser.add_argument('--model', type=str, default="resnet18")
+    parser.add_argument('--model', type=str, default="models.resnet18")
     parser.add_argument('--dataloader', type=str, default="Retina_Dataset")
     parser.add_argument('--seed', type=int, default=random.randint(0, 9999999))
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--data_dir', type=str, default="data")
     parser.add_argument('--lr', type=float, default=0.0001)
-    parser.add_argument('--classification',type=str,default = 'normal',help = "how many classes (binary or normal)")
     parser.add_argument('--sites',type=int,default = 1,help = "how many sites")
     parser.add_argument('--train_size',type=int,default = 1000, help = "how much train data each round")
     parser.add_argument('--positive_percent',type=float,default = 0.5,help = "what fraction of training data is positive")
@@ -202,7 +195,7 @@ def parse_args():
     parser.add_argument('--weighted_loss',type=str, default = 'no',help = "use weighted_loss or not")    
     parser.add_argument('--class_incremental',type=str, default = 'no',help = "class_incremental training or not")
     parser.add_argument('--val_auc',type=str, default = 'yes',help = "auc or not")
-    parser.add_argument('--round',type=str, default = 'yes',help = "round or site dynamic (no for site)")
+  
 
     args = parser.parse_args()
     return args
